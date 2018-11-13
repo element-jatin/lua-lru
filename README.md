@@ -87,6 +87,48 @@ Methods:
       * O(1) to create an iterator,
       * O(cache size) to visit all elements.
 
+## Typical Usecase
+lru = require 'lru'
+-- Create an LRU with 
+-- no limit on number of elements
+-- 400bytes limit on memory size
+cache = lru.new(math.huge, 400)
+
+cache:set(1, 'the')
+cache:bytesUsage() 
+-- output: 
+-- 76	3	79	
+cache:printKeyValuePairs() 
+-- output: 
+-- 1	the
+
+cache:set(2, 'quick')
+cache:bytesUsage() 
+-- output: 116	8	124	
+cache:printKeyValuePairs() 
+-- output: 
+-- 2	quick	
+-- 1	the
+
+cache:set(3, {a='brown', b='fox'})
+cache:set(4, 'jumps')
+
+cache:bytesUsage()
+-- output:
+-- 196	137	333	
+
+cache:printKeyValuePairs()
+-- output:
+-- 4	jumps	
+-- 3	{
+--  a : "brown"
+--  b : "fox"
+-- }
+2	quick	
+1	the	
+
+
+
 ## Comparison with other implementations
 
 I have found two other implementations of LRU in Lua.
