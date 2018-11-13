@@ -88,6 +88,10 @@ Methods:
       * O(cache size) to visit all elements.
 
 ## Typical Usecase
+
+
+
+```lua
 lru = require 'lru'
 -- Create an LRU with 
 -- no limit on number of elements
@@ -124,9 +128,9 @@ cache:printKeyValuePairs()
 --  a : "brown"
 --  b : "fox"
 -- }
-2	quick	
-1	the	
-
+-- 2	quick	
+-- 1	the	
+```
 
 
 ## Comparison with other implementations
