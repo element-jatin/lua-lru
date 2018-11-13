@@ -13,6 +13,7 @@ function lru.new(max_size, max_bytes)
     -- current size
     local size = 0
     local bytes_used = 0
+    local entry_bytes_used = 36
 
     -- map is a hash map from keys to tuples
     -- tuple: value, prev, next, key
@@ -71,8 +72,9 @@ function lru.new(max_size, max_bytes)
     local function del(key, tuple)
         map[key] = nil
         cut(tuple)
-        size = size - 1
+        entry_bytes_used = entry_bytes_used - DynamicHashTableSizeDecrement(size)
         bytes_used = bytes_used - (tuple[BYTES] or 0)
+        size = size - 1
         removed_tuple = tuple
     end
 
@@ -80,7 +82,7 @@ function lru.new(max_size, max_bytes)
     -- returns last removed element or nil
     local function makeFreeSpace(bytes)
         while size + 1 > max_size or
-            (max_bytes and bytes_used + bytes > max_bytes)
+            (max_bytes and bytes_used + entry_bytes_used + bytes > max_bytes)
         do
             assert(oldest, "not enough storage for cache")
             del(oldest[KEY], oldest)
@@ -104,8 +106,13 @@ function lru.new(max_size, max_bytes)
         end
         if value ~= nil then
             -- the value is not removed
-            bytes = max_bytes and (bytes or #value) or 0
-            makeFreeSpace(bytes)
+--            bytes = max_bytes and (bytes or #value) or 0
+            bytes = max_bytes and (bytes or getSize(value)) or 0
+            -- this is an estimate before checking f there is enough space
+            entry_bytes = DynamicHashTableSizeIncrement(size)
+            -- this is the real memory once ensuring we have enogh space
+            makeFreeSpace(bytes + entry_bytes)
+            entry_bytes = DynamicHashTableSizeIncrement(size)
             local tuple1 = removed_tuple or {}
             map[key] = tuple1
             tuple1[VALUE] = value
@@ -113,6 +120,7 @@ function lru.new(max_size, max_bytes)
             tuple1[BYTES] = max_bytes and bytes
             size = size + 1
             bytes_used = bytes_used + bytes
+            entry_bytes_used = entry_bytes_used + entry_bytes
             setNewest(tuple1)
         else
             assert(key ~= nil, "Key may not be nil")
@@ -142,6 +150,67 @@ function lru.new(max_size, max_bytes)
     local function lru_pairs()
         return mynext, nil, nil
     end
+    
+    -- returns numElements
+    local function numElements()
+        return size
+    end
+    
+    -- returns bytesUsed
+    local function bytesUsed()
+        return bytes_used + entry_bytes_used
+    end
+    
+    local function bytesUsage()
+        return entry_bytes_used, bytes_used, entry_bytes_used+bytes_used
+    end
+    
+    -- returns bytesUsed
+    local function printKeyValuePairs()
+      for key, value in lru_pairs(cache) do
+        print(key, value)
+      end
+    end
+    
+    function DynamicHashTableSizeIncrement(entries)
+        return (math.pow(2, math.ceil(math.log(entries+1) / math.log(2))) - math.pow(2, math.ceil(math.log(entries) / math.log(2))) ) * 40 
+    end
+    
+    function DynamicHashTableSizeDecrement(entries)
+        return (math.pow(2, math.ceil(math.log(entries) / math.log(2))) - math.pow(2, math.ceil(math.log(entries-1) / math.log(2))) ) * 40 
+    end
+    
+    
+    function table_length(tab)
+      local length = 0
+      for key, value in pairs(tab) do
+        length = length + 1
+      end
+      return length
+    end
+    
+    
+    function DynamicMixedArryHashTableSize(tab)
+      hashtable_bytes = math.pow(2, math.ceil(math.log(table_length(tab) - #tab) / math.log(2))) * 40
+      list_bytes = math.pow(2, math.ceil(math.log(#tab) / math.log(2))) * 16
+      return 36 + hashtable_bytes + list_bytes
+    end
+    
+    function getSize(obj)
+      local bytes = 0
+      if type(obj) == 'string' then
+        bytes = #obj
+      elseif type(obj) == 'table' then
+        -- entry bytes
+        bytes = bytes + DynamicMixedArryHashTableSize(obj)
+        -- value bytes
+        for key, value in pairs(obj) do
+          bytes = bytes + getSize(value)
+        end
+      end
+      return bytes
+    end
+    
 
     local mt = {
         __index = {
@@ -149,6 +218,10 @@ function lru.new(max_size, max_bytes)
             set = set,
             delete = delete,
             pairs = lru_pairs,
+            numElements = numElements,
+            bytesUsed = bytesUsed,
+            bytesUsage = bytesUsage,
+            printKeyValuePairs=printKeyValuePairs,
         },
         __pairs = lru_pairs,
     }
